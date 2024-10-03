@@ -90,9 +90,8 @@ def run_image_upload(max_candidatos):
     # Mostrar o ranking atualizado para Prefeito e Vereador, mesmo que haja erro
     ranking_prefeito_df, ranking_vereador_df = mostrar_ranking(max_candidatos)
     
-    # Gerar gráficos de barras para Prefeito e Vereador
-    gerar_graficos_qrcodes(ranking_prefeito_df, 'Prefeito')
-    gerar_graficos_qrcodes(ranking_vereador_df, 'Vereador')
+    # Gerar gráficos de barras para Prefeito e Vereador por sessão com dropdown
+    gerar_graficos_qrcodes_dropdown(ranking_prefeito_df, ranking_vereador_df)
 
     # Gerar Excel para download
     generate_excel(st.session_state.voto_acumulado)
@@ -229,37 +228,55 @@ def gerar_grafico_por_cargo(cargo, votos_cargo):
     # Exibir o gráfico
     st.altair_chart(chart, use_container_width=True)
 
-# Função para gerar gráficos de barras com Altair para cada QR Code com valores no topo das barras
-def gerar_graficos_qrcodes(ranking_df, cargo):
-    st.write(f"### Gráficos de Votos para {cargo} (Top Candidatos)")
-    for idx, (_, erro, votos_do_qrcode) in enumerate(st.session_state.qrcode_images):
-        if not erro and votos_do_qrcode[cargo]:
-            # Gerar os dados do gráfico com base na mesma ordem da tabela
-            candidatos = ranking_df["Candidato"].values
-            votos = [votos_do_qrcode[cargo].get(candidato, 0) for candidato in candidatos]
-            
-            # Criar DataFrame para Altair
-            chart_data = pd.DataFrame({
-                'Candidato': candidatos,
-                'Votos': votos
-            })
-            
-            # Criar o gráfico com Altair
-            chart = alt.Chart(chart_data).mark_bar().encode(
-                x=alt.X('Candidato', sort='-y'),
-                y='Votos',
-                tooltip=['Candidato', 'Votos']
-            ).properties(
-                title=f"Gráfico de Votos - {cargo} - Sessão {idx + 1}"
-            ).interactive()
-            
-            # Exibir o gráfico
-            st.altair_chart(chart, use_container_width=True)
+# Função para gerar gráficos de barras com Altair para cada QR Code com valores no topo das barras e dropdown para seleção
+def gerar_graficos_qrcodes_dropdown(ranking_prefeito_df, ranking_vereador_df):
+    if not st.session_state.qrcode_images:
+        st.write("Nenhuma sessão disponível.")
+        return
+    
+    # Dropdown para selecionar a sessão de QR Code
+    st.write(f"### Selecione a sessão para visualizar os gráficos de votos")
+    opcoes_sessoes = [f"QR Code Sessão {i + 1}" for i in range(len(st.session_state.qrcode_images))]
+    sessao_selecionada = st.selectbox("Selecione a sessão:", options=opcoes_sessoes, index=0)
 
-            # Exibir a quantidade de votos em Branco e Nulo abaixo do gráfico
-            brancos = votos_do_qrcode.get("BRAN", 0)
-            nulos = votos_do_qrcode.get("NULO", 0)
-            st.write(f"**Brancos**: {brancos} | **Nulos**: {nulos}")
+    idx_selecionado = opcoes_sessoes.index(sessao_selecionada) if sessao_selecionada in opcoes_sessoes else None
+    if idx_selecionado is not None:
+        _, erro, votos_do_qrcode = st.session_state.qrcode_images[idx_selecionado]
+
+        if not erro:
+            st.write(f"#### Gráfico de Votos - Prefeito - Sessão {sessao_selecionada}")
+            gerar_grafico_qrcode_por_cargo('Prefeito', votos_do_qrcode, ranking_prefeito_df)
+
+            st.write(f"#### Gráfico de Votos - Vereador - Sessão {sessao_selecionada}")
+            gerar_grafico_qrcode_por_cargo('Vereador', votos_do_qrcode, ranking_vereador_df)
+
+# Função para gerar gráficos de votos de QR Code por cargo
+def gerar_grafico_qrcode_por_cargo(cargo, votos_do_qrcode, ranking_df):
+    if votos_do_qrcode[cargo]:
+        # Gerar os dados do gráfico com base na mesma ordem da tabela
+        candidatos = ranking_df["Candidato"].values
+        votos = [votos_do_qrcode[cargo].get(candidato, 0) for candidato in candidatos]
+        
+        # Criar DataFrame para Altair
+        chart_data = pd.DataFrame({
+            'Candidato': candidatos,
+            'Votos': votos
+        })
+        
+        # Criar o gráfico com Altair
+        chart = alt.Chart(chart_data).mark_bar().encode(
+            x=alt.X('Candidato', sort='-y'),
+            y='Votos',
+            tooltip=['Candidato', 'Votos']
+        ).interactive()
+        
+        # Exibir o gráfico
+        st.altair_chart(chart, use_container_width=True)
+
+        # Exibir a quantidade de votos em Branco e Nulo abaixo do gráfico
+        brancos = votos_do_qrcode.get("BRAN", 0)
+        nulos = votos_do_qrcode.get("NULO", 0)
+        st.write(f"**Brancos**: {brancos} | **Nulos**: {nulos}")
 
 # Função para gerar a planilha Excel e disponibilizar para download
 def generate_excel(voto_acumulado):
