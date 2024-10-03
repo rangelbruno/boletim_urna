@@ -1,0 +1,7 @@
+opencv-python-headless
+pyzbar
+Pillow
+streamlit
+numpy
+pandas
+XlsxWriter
